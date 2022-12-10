@@ -1,0 +1,21 @@
+{
+  "name": "terminal",
+  "version": "0.1.7",
+  "description": "test of Node js console",
+  "main": "game.js",
+  "scripts": {},
+  "pkg": {
+    "scripts": "game.js",
+    "targets": [
+      "node10-win-x64"
+    ],
+    "outputPath": "dist"
+  },
+  "author": "SuperJaba2000",
+  "license": "ISC",
+  "dependencies": {
+    "keypress": "^0.2.1",
+    "pkg": "^5.8.0",
+    "simplex-noise": "^3.0.1"
+  }
+}
