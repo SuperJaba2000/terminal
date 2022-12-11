@@ -1,14 +1,18 @@
 /* a library that intercepts keystrokes and mouse clicks */
 const keypress = require('keypress');
 /* noise library for procedural landscape generation */
-const SimplexNoise = require('simplex-noise');
+const simplex_noise = require('simplex-noise');
+/* standard Node js module for working with http */
+const http = require('http');
+/* library for creating persistent websocket connections */
+const ws = require('ws');
 
 /* application logs will be printed to process.stderr */
 var debug = process.argv.indexOf('--debug') > -1;
 
 
 /* a noise instance with a specific seed */
-const simplex = new SimplexNoise(Math.random()*Math.random());
+const simplex = new simplex_noise(Math.random()*Math.random());
 
 /* screen sizes in characters and a buffer for storing temporary data */
 var window_width, window_height, buffer = {};
@@ -20,7 +24,7 @@ var worldpos = {x: 0, y: 0};
 /* basic game constants */
 const Vars = {
 	app_name: 'terminal game',
-	app_version: '0.1.7',
+	app_version: '0.1.8',
 	
 	fps: 60,
 	window_width: 46,
@@ -61,13 +65,26 @@ const Vars = {
 	},
 };
 
+/* game server */
+class SocketServer {
+	static create(address, port){
+		
+	}
+}
+
+/* game client for connection to server */
+class SocketClient {
+	static connect(address, port){
+		
+	}
+}
 
 /* a game object that occupies one character on the screen */
 class Entity {
 	constructor(name, color_code, sym) {
 		this.name = name;
 		this.color_code = color_code;
-		this.sym = sym || '\u0000';
+		this.sym = sym || ' ';//'\u0000';
 	}
 } 
 
@@ -90,9 +107,11 @@ class Resourses {
 			[2]: new Entity('water', Vars.color_codes_background['blue_bright']),
 			[3]: new Entity('deep-water', Vars.color_codes_background['blue']),
 			
-			[4]: new Entity('bush', Vars.color_codes['green'], '@'),
+			[4]: new Entity('bush', Vars.color_codes['green'], '▒'),
+			[5]: new Entity('flower', Vars.color_codes['yellow_bright'], '°'),
+			[6]: new Entity('seaweed', Vars.color_codes['green'], '░'),
 			
-			[5]: new Entity('player', Vars.color_codes['red_bright'], '*')
+			[9]: new Entity('player', Vars.color_codes['red_bright'], ['▲', '►', '▼', '◄'])
 		}
 	}
 	
@@ -187,16 +206,28 @@ class Game {
 				    Game.gameState = 'menu';
 					break;
 				case 'up':
-				    playerpos.y -= 1;
+				    if(playerpos.o == 0)
+				        playerpos.y -= 1;
+					else
+						playerpos.o = 0;
 					break;
 				case 'down':
-				    playerpos.y += 1;
+				    if(playerpos.o == 2)
+				        playerpos.y += 1;
+					else
+						playerpos.o = 2;
 					break;
 				case 'left':
-				    playerpos.x -= 1;
+				    if(playerpos.o == 3)
+				        playerpos.x -= 1;
+					else
+						playerpos.o = 3;
 					break;
 				case 'right':
-				    playerpos.x += 1;
+				    if(playerpos.o == 1)
+				        playerpos.x += 1;
+					else
+						playerpos.o = 1;
 					break;
 			}
 			
@@ -259,6 +290,7 @@ class Game {
 		
 		playerpos.x = Math.round(window_width/2);
 	    playerpos.y = Math.round(window_height/2);
+		playerpos.o = 0;
 		
 		this.resourses = Resourses;
 		
@@ -280,14 +312,31 @@ class Game {
 			let elevation = Math.abs(noise(x, y, 10, [1, 3, 4]));
 			
 			if(elevation <= 0.3){
-				/* deep-water and water */
-				return new Tile(elevation <= 0.1 ? 3 : 2, null)
+				if(elevation < 0.1){
+					/* deep-water */
+					return new Tile(3, null)
+				}else{
+					/* water */
+					return new Tile(2, null)
+				}
 			}else if(elevation <= 0.5){
 				/* sandy beaches */
-				return new Tile(1, null)
+				if(Math.random() > 0.94){
+						return new Tile(1, 6)
+					}else{
+						return new Tile(1, null)
+					}
 			}else{
-				/* grass and bushes */
-				return new Tile(0, (Math.random() > 0.9) ? 4 : null)
+				if(Math.random() > 0.95){
+					/* grass and bushes */
+					return new Tile(0, 4)
+				}else if(Math.random() > 0.8){
+				    /* grass and flowers */
+				    return new Tile(0, 5)
+				}else{
+					/* only grass */
+					return new Tile(0, null)
+				}
 			}
 		}).sizes(window_width, window_height);
 	}
@@ -299,7 +348,7 @@ class Game {
 		if(window_width != Vars.window_width || window_height != Vars.window_height){
 			Game.crashed = true;
 			process.stdout.write(`Current screen sizes:${window_width}x${window_height}  `)
-			process.stdout.write(`${Vars.color_codes['red_bright']}Please set app properties > screen size: ${Vars.window_width-1}x${Vars.window_height} and restart the game!${Vars.color_codes['reset']}  `)
+			process.stdout.write(`${Vars.color_codes['red_bright']}Please right-click on the window at the top, go to the properties section and set the buffer size manually(the height really should be more): ${Vars.window_width-1}x${Vars.window_height} and restart the game!${Vars.color_codes['reset']}  `)
 		}
 	}
 	
@@ -404,8 +453,8 @@ class Game {
 			    tileString += floor.color_code;
 			
 			    if(_tile.x == playerpos.x && _tile.y == playerpos.y){
-				    tileString += res.get(5).color_code;
-                    tileString += res.get(5).sym;					
+				    tileString += res.get(9).color_code;
+                    tileString += res.get(9).sym[playerpos.o];					
 			    }else if(block){
 				    tileString += block.color_code;
 				    tileString += block.sym;

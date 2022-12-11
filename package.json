@@ -1,13 +1,14 @@
 {
   "name": "terminal",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "test of Node js console",
   "main": "game.js",
   "scripts": {},
   "pkg": {
     "scripts": "game.js",
     "targets": [
-      "node10-win-x64"
+      "node10-win-x64",
+	  "node10-mac-x64"
     ],
     "outputPath": "dist"
   },
