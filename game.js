@@ -2,17 +2,27 @@
 const keypress = require('keypress');
 /* noise library for procedural landscape generation */
 const simplex_noise = require('simplex-noise');
-/* standard Node js module for working with http */
-const http = require('http');
-/* library for creating persistent websocket connections */
-const ws = require('ws');
+/* standard Node js module for working with filesystem */
+const fs = require('fs');
+
 
 /* application logs will be printed to process.stderr */
 var debug = process.argv.indexOf('--debug') > -1;
 
+var mapPath, mapFile, loadMap = process.argv.indexOf('--load') > -1;
+    if(loadMap){
+        let mapArg = process.argv.find( arg => arg.substring(0, 5) == 'file=');
+		mapPath = './' + mapArg.substring(5);
+		mapFile = fs.readFileSync(mapPath, {encoding:'utf8', flag:'r'});
+	}
+
+var editor = process.argv.indexOf('--editor') > -1;
+
+
+const world_seed = Math.random() * Math.random();
 
 /* a noise instance with a specific seed */
-const simplex = new simplex_noise(Math.random()*Math.random());
+const simplex = new simplex_noise(world_seed);
 
 /* screen sizes in characters and a buffer for storing temporary data */
 var window_width, window_height, buffer = {};
@@ -20,14 +30,16 @@ var window_width, window_height, buffer = {};
 var playerpos = {x: 0, y: 0};
 var worldpos = {x: 0, y: 0};
 
+var max_health = 10;
+
 
 /* basic game constants */
 const Vars = {
 	app_name: 'terminal game',
-	app_version: '0.1.8',
+	app_version: '0.1.91',
 	
 	fps: 60,
-	window_width: 46,
+	window_width: 45,
 	window_height: 40,
 	
 	/* ANSI codes for changing the color of characters */
@@ -39,12 +51,16 @@ const Vars = {
 		green: '\x1b[32m',
 		yellow: '\x1b[33m',
 		blue: '\x1b[34m',
+		magenta: '\x1b[35m',
+		cyan: '\x1b[36m',
 		white: '\x1b[37m',
 		
 		red_bright: '\x1b[91m',
 	    green_bright: '\x1b[92m',
 	    yellow_bright: '\x1b[93m',
 	    blue_bright: '\x1b[94m',
+		magenta_bright: '\x1b[95m',
+		cyan_bright: '\x1b[96m',
 		white_bright: '\x1b[97m'
 	},
 	
@@ -57,11 +73,17 @@ const Vars = {
 		green: '\x1b[42m',
 		yellow: '\x1b[43m',
 		blue: '\x1b[44m',
+		magenta: '\x1b[45m',
+		cyan: '\x1b[46m',
+		white: '\x1b[47m',
 		
 		red_bright: '\x1b[101m',
 		green_bright: '\x1b[102m',
 		yellow_bright: '\x1b[103m',
-		blue_bright: '\x1b[104m'
+		blue_bright: '\x1b[104m',
+		magenta_bright: '\x1b[105m',
+		cyan_bright: '\x1b[106m',
+		white_bright: '\x1b[107m'
 	},
 };
 
@@ -97,21 +119,59 @@ class Player extends Entity {
 	}
 }
 
+class Random {	
+	static basic(min, max, round = true) {
+        let number = min + Math.random()*(max - min);
+		
+        return round ? Math.round(number) : number;
+    }
+	
+	static chance(percent) {
+		return this.basic(0, 100, false) <= Number(percent);
+	}
+	
+	static seed(seed, min, max, round = true) {
+        let number = '0.' + Math.round(seed * 16807 % 2147483647);
+		number = min + Number(number)*(max - min);
+		
+        return round ? Math.round(number-10) : number;
+	}
+	
+	static chanceSeed(seed, percent) {
+		return this.seed(seed, 0, 100, false) <= Number(percent);
+	}
+}
 
 /* all existing game entities and their ids */
 class Resourses {
 	static load() {
 		this.entities = {
+			//[0]: new Entity(),
+			
+			
+			//[11]: new Entity('grass', Vars.color_codes_background['green']),
+			//[12]: 
+			
 	        [0]: new Entity('grass', Vars.color_codes_background['green']),
 			[1]: new Entity('sand', Vars.color_codes_background['yellow_bright']),
-			[2]: new Entity('water', Vars.color_codes_background['blue_bright']),
+			[2]: new Entity('shallow-water', Vars.color_codes_background['blue_bright']),
+			//[3]: new Entity('water', Vars.color_codes
 			[3]: new Entity('deep-water', Vars.color_codes_background['blue']),
 			
-			[4]: new Entity('bush', Vars.color_codes['green'], '▒'),
+			[4]: new Entity('bush', Vars.color_codes['green'], '♣'),
 			[5]: new Entity('flower', Vars.color_codes['yellow_bright'], '°'),
 			[6]: new Entity('seaweed', Vars.color_codes['green'], '░'),
 			
-			[9]: new Entity('player', Vars.color_codes['red_bright'], ['▲', '►', '▼', '◄'])
+			[7]: new Entity('ruin-top-left', Vars.color_codes['white_bright'], '╔'),
+			[8]: new Entity('ruin-top-right', Vars.color_codes['white_bright'], '╗'),
+			[9]: new Entity('ruin-bottom-left', Vars.color_codes['white_bright'], '╚'),
+			[10]: new Entity('ruin-bottom-right', Vars.color_codes['white_bright'], '╝'),
+			
+			[13]: new Entity('ruined-floor', Vars.color_codes_background['white']),
+			[14]: new Entity('ruined-crystal', Vars.color_codes['magenta_bright'], '♦'),
+			//[15]: new Entity(
+			
+			[255]: new Entity('player', Vars.color_codes['red_bright'], ['▲', '►', '▼', '◄'])
 		}
 	}
 	
@@ -131,8 +191,9 @@ class Tile {
 
 /* a map assembled from a variety of tiles */
 class Map {
-	constructor(generator){
+	constructor(generator, post){
 		this.generator = generator;
+		this.post = post;
 	}
 	
 	sizes(width, height) {
@@ -156,6 +217,15 @@ class Map {
 				
 				this.tiles[y][x] = tile;
 				this.updatedTiles.add({x: x, y: y})
+			}
+		}
+		
+		for(let y = 0; y < this.height; y++) {
+			for(let x = 0; x < this.width; x++) {
+				let abs_x = worldpos.x*window_width + x;
+				let abs_y = worldpos.y*window_height + y;
+				
+				const tile = this.post(this.tiles[y][x], abs_x, abs_y);
 			}
 		}
 		
@@ -271,8 +341,6 @@ class Game {
 		if(debug)
 			process.stderr.write('[exit]: the application is closed ')
 		
-		keypress.disableMouse(process.stdout)
-		
 		process.stdin.pause()
 		
 		process.stdout.write('\u001b[?25h')
@@ -291,6 +359,7 @@ class Game {
 		playerpos.x = Math.round(window_width/2);
 	    playerpos.y = Math.round(window_height/2);
 		playerpos.o = 0;
+		playerpos.h = 10;
 		
 		this.resourses = Resourses;
 		
@@ -309,35 +378,64 @@ class Game {
         
 		/* map generation */
 		this.map = new Map( (x, y) => {
+			if(loadMap){
+				let loadedMap = JSON.parse(mapFile);
+				
+				let floor = Number(loadedMap[y][x][0]);
+				let block = Number(loadedMap[y][x][1]);
+				
+				return new Tile(floor || 0, block || null);
+			}
+			
 			let elevation = Math.abs(noise(x, y, 10, [1, 3, 4]));
 			
-			if(elevation <= 0.3){
-				if(elevation < 0.1){
-					/* deep-water */
-					return new Tile(3, null)
-				}else{
-					/* water */
-					return new Tile(2, null)
-				}
-			}else if(elevation <= 0.5){
-				/* sandy beaches */
-				if(Math.random() > 0.94){
-						return new Tile(1, 6)
-					}else{
-						return new Tile(1, null)
-					}
+			let random = Random.seed(world_seed + (Math.abs(x)**Math.abs(y)), 0, 1, false);
+			
+			var floor, block;
+			
+			if(elevation <= 0.2){
+				floor = elevation < 0.08 ? 3 : 2;
+				if(elevation > 0.06 && random > 0.6)
+					block = 15;
+			}else if(elevation <= 0.4){
+				floor = 1;
+				if(random > 0.94) block = 6;
 			}else{
-				if(Math.random() > 0.95){
-					/* grass and bushes */
-					return new Tile(0, 4)
-				}else if(Math.random() > 0.8){
-				    /* grass and flowers */
-				    return new Tile(0, 5)
-				}else{
-					/* only grass */
-					return new Tile(0, null)
+				floor = 0;
+				
+				if(random > 0.95){
+					block = 4;
+				}else if(random > 0.75){
+				    block = 5;
 				}
 			}
+			
+			return new Tile(floor || 0, block || null)
+		}, (tile, x, y) => {
+			if(loadMap)
+				return tile;
+			
+			let ruin_x = Random.seed(world_seed, 0, 80) - 40;
+			let ruin_y = Random.seed(world_seed*2, 0, 80) - 40;
+			
+			if(Math.abs(ruin_x+2 - x) <= 2 && Math.abs(ruin_y+2 - y) <= 2){
+				tile.block = null;
+				tile.floor = 13;
+			}
+			
+			if(x == ruin_x && y == ruin_y){
+				tile.block = 7;
+			}else if(x == ruin_x+4 && y == ruin_y){
+				tile.block = 8;
+			}else if(x == ruin_x && y == ruin_y+4){
+				tile.block = 9;
+			}else if(x == ruin_x+4 && y == ruin_y+4){
+				tile.block = 10;
+			}else if(x == ruin_x+2 && y == ruin_y+2){
+				tile.block = 14;
+			}
+			
+			return tile;
 		}).sizes(window_width, window_height);
 	}
 	
@@ -348,7 +446,7 @@ class Game {
 		if(window_width != Vars.window_width || window_height != Vars.window_height){
 			Game.crashed = true;
 			process.stdout.write(`Current screen sizes:${window_width}x${window_height}  `)
-			process.stdout.write(`${Vars.color_codes['red_bright']}Please right-click on the window at the top, go to the properties section and set the buffer size manually(the height really should be more): ${Vars.window_width-1}x${Vars.window_height} and restart the game!${Vars.color_codes['reset']}  `)
+			process.stdout.write(`${Vars.color_codes['red_bright']}Please right-click on the window at the top, go to the properties section and set the buffer size manually(the height really should be more): ${Vars.window_width}x${Vars.window_height} and restart the game!${Vars.color_codes['reset']}  `)
 		}
 	}
 	
@@ -453,8 +551,8 @@ class Game {
 			    tileString += floor.color_code;
 			
 			    if(_tile.x == playerpos.x && _tile.y == playerpos.y){
-				    tileString += res.get(9).color_code;
-                    tileString += res.get(9).sym[playerpos.o];					
+				    tileString += res.get(255).color_code;
+                    tileString += res.get(255).sym[playerpos.o];					
 			    }else if(block){
 				    tileString += block.color_code;
 				    tileString += block.sym;
@@ -472,6 +570,11 @@ class Game {
 			
 			updatePixel(0, 0, `               `)
 			updatePixel(0, 0, `x: ${abs_playerx}; y: ${abs_playery}`)
+			
+			let health_x = window_width - max_health;
+			for(let x = 0; x < max_health; x++){
+				updatePixel(health_x + x, 0, `${playerpos.h > x ? Vars.color_codes['red_bright'] : Vars.color_codes['white']}♥`)
+			}
 		}
 	}
 	

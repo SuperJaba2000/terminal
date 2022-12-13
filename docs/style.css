@@ -1,0 +1,86 @@
+* {
+	padding: 0; 
+	margin: 0;
+}
+
+html, body {
+    width: 100%;
+	height: 100%;
+	user-select: none;
+	background-color: #e0e0ff;
+} 
+
+#canvas {
+	position: absolute;
+	left: 1rem;
+	top: 1rem;
+	
+	background-color: #aaaaaa;
+	
+	width: min(90vw, 90vh);
+	height: min(80vw, 80vh);
+}
+
+#panel {
+	position: absolute;
+	left: calc(min(90vw, 90vh) + 2rem);
+	top: 1rem;
+	background-color: #dddde0;
+	border: 2px solid #bbbbbb;
+	border-radius: 0.5rem;
+	width: min(20vw - 4px, 20vh - 4px);
+	height: min(80vw - 4px, 80vh - 4px);
+}
+
+#select-entity, #select-layer, #select-tool {
+	height: 1.2rem;
+	position: relative;
+	left: 0.5rem;
+	width: min(20vw - 1rem - 8px, 20vh - 1rem - 8px);
+}
+
+#button-import {
+	position: relative;
+	left: 0.5rem;
+	top: min(80vw - 7rem - 8px, 80vh - 7rem - 8px);
+	
+	cursor: pointer;
+	
+	background-color: #dddde0;
+	
+	text-align: center;
+	border: 2px solid #bbbbbb;
+	border-radius: 0.5rem;
+	
+	width: min(20vw - 1rem - 8px, 20vh - 1rem - 8px);
+	height: 1.2rem;
+}
+
+#button-export {
+	position: relative;
+	left: 0.5rem;
+	top: min(80vw - 6.5rem - 8px, 80vh - 6.5rem - 8px);
+	
+	cursor: pointer;
+	
+	background-color: #dddde0;
+	
+	text-align: center;
+	border: 2px solid #bbbbbb;
+	border-radius: 0.5rem;
+	
+	width: min(20vw - 1rem - 8px, 20vh - 1rem - 8px);
+	height: 1.2rem;
+}
+
+#button-import:hover, #button-export:hover {
+	background-color: #dd0000;
+}
+
+#button-import:active, #button-export:active {
+	background-color: #bb0000;
+}
+
+#lfs {
+	visibility: hidden;
+}
