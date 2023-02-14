@@ -10,41 +10,78 @@ let select_tool   = document.getElementById('select-tool');
 canvas.width = width*p;
 canvas.height = height*p;
 
-let map = new Array(height).fill([]).map( () => new Array(width).fill(0).map( () => [null, null]) );
+let map = new Array(height).fill([]).map( () => new Array(width).fill(0).map( () => [-1, -1]) );
 
 let ctx = canvas.getContext('2d');
 
 let layer = 0;
 
 class Entity {
-	constructor(name, color, sym) {
+	constructor(name, colorCodes, symbols = [' '], symbolChoise = 0) {
 		this.name = name;
-		this.color = color;
-		this.sym = sym || ' ';
+		this.colorCodes = colorCodes;
+		this.symbols = symbols;
+		this.symbolChoise = symbolChoise;
 	}
-} 
+	
+	color() {
+		return this.colorCodes[2];
+	}
+	
+	symbol(x, y, t) {
+		if(this.symbolChoise == 0){
+			return this.symbols[0];
+		}else if(this.symbolChoise == 1){
+			return this.symbols[Random.basic(0, this.symbols.length-1)];
+		}
+		
+		return this.symbols[0];
+	}
+};
+
+class Block extends Entity {
+	constructor(name, colorCodes, symbols, symbolChoise = 0, walkable = false){
+		super(name, colorCodes, symbols, symbolChoise)
+		
+		this.walkable = walkable;
+	}
+};
+
+class Floor extends Entity {
+	
+};
 
 let entities = {
-	[0]: new Entity('grass', 'green'),
-	[1]: new Entity('sand', 'yellow'),
-	[2]: new Entity('shallow-water', 'blue'),
-
-	[3]: new Entity('deep-water', 'blue'),
-
-	[4]: new Entity('bush', 'green', '\u2663'),
-	[5]: new Entity('flower', 'yellow', '\u2022'),
-	[6]: new Entity('seaweed', 'green', '\u2591'),
+	/* -- region special -- */
+	[0]: new Entity('void', [0, 0, 'black']),
 	
-	[7]: new Entity('ruin-top-left', 'white', '╔'),
-	[8]: new Entity('ruin-top-right', 'white', '╗'),
-	[9]: new Entity('ruin-bottom-left', 'white', '╚'),
-	[10]: new Entity('ruin-bottom-right', 'white', '╝'),
+	/* -- region floors -- */
+	[1]: new Entity('floor-stone', [100, '48;5;241', 'grey']),
+	[2]: new Entity('floor-grass', [42, '48;5;28', 'green']),
+	[3]: new Entity('floor-sand',  [103, '48;5;227', 'yellow']),
+	[4]: new Entity('floor-snow',  [107, '48;5;15', 'white']),
+	[5]: new Entity('floor-ruin',  [47, '48;5;239', 'firebrick']),
+	/* 6 - 9 ids are reserved */
+	[10]: new Entity('floor-shallow-water', [104, '48;5;20', 'blue']),
+	[11]: new Entity('floor-deep-water',    [44, '48;5;17', 'navy']),
+	/* 12 - 15 ids are reserved */
 	
-	[13]: new Entity('ruined-floor', 'white'),
-	[14]: new Entity('ruined-crystal', 'magenta', '♦'),
-
-	[255]: new Entity('player', 'red', ['▲', '►', '▼', '◄'])
-};
+	/* -- region blocks -- */
+	[16]: new Entity('block-small-bush', ['1;92', '38;5;22', 'darkgreen'], ['♣', '♠'], 1),
+	/* 17 - 20 ids are reserved */
+	[21]: new Entity('block-ruin-horizontal',   [33, '38;5;236'], ['═']),
+	[22]: new Entity('block-ruin-vertical',     [33, '38;5;236'], ['║']),
+	[23]: new Entity('block-ruin-top-left',     [33, '38;5;236'], ['╔']),
+	[24]: new Entity('block-ruin-top-right',    [33, '38;5;236'], ['╗']),
+	[25]: new Entity('block-ruin-bottom-left',  [33, '38;5;236'], ['╚']),
+	[26]: new Entity('block-ruin-bottom-right', [33, '38;5;236'], ['╝']),
+	[27]: new Entity('block-mangeta-crystal',   [35, '38;5;92']   ['♦']),
+	/* 28 - 31 ids are reserved */
+			
+	/* -- region overlays -- */
+	[32]: new Entity('overlay-sunflower', [93, '38;5;226', 'yellow'], ['°'], 0, true),
+	[33]: new Entity('overlay-seaweed',   [32, '38;5;34', 'seagreen'], ['░'], 0, true),
+}
 
 for(let e in entities){
 	let option = document.createElement('option');
@@ -86,7 +123,7 @@ select_tool.addEventListener('change', function(){
 })
 
 select_entity.addEventListener('change', function(){
-	activeEntity = this.value;
+	activeEntity = Number(this.value);
 })
 
 select_layer.addEventListener('change', function(){
@@ -94,23 +131,23 @@ select_layer.addEventListener('change', function(){
 	render()
 })
 
-let activeEntity = '0';
+let activeEntity = 0;
 
 function drawTile(x, y){
 	let tile = map[y][x];
 	
-	if(!tile[layer])
+	if(typeof tile[layer] != 'number' || tile[layer] == -1)
 		return;
 	
 	let entity = entities[tile[layer]];
 	
-	ctx.fillStyle = entities[tile[layer]].color;
+	ctx.fillStyle = entity.color();
 	
-	if(entity.sym == ' '){
+	if(entity.symbol() == ' '){
 	    ctx.fillRect(x*p, y*p, p, p)
 	}else{
 	    ctx.font = `${p}px serif`;
-        ctx.fillText(entities[tile[layer]].sym, x*p, y*p);
+        ctx.fillText(entity.symbol(), x*p, y*p);
 	}
 }
 
@@ -197,12 +234,18 @@ window.addEventListener('mouseup', (e) => {
 render()
 
 function toFile() {
+	var name = document.getElementById('map-name').value||'unnamed';
 	var a = document.getElementById("lfs");
-    var file = new Blob([JSON.stringify(map)], {
+    var file = new Blob([JSON.stringify([
+	    {
+			name: name
+		},
+	    map
+	])], {
         type: 'plain/text'
     })
     a.href = URL.createObjectURL(file);
-    a.download = 'export.json';
+    a.download = `${name}.json`;
     a.click();
 }
 

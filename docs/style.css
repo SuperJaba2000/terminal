@@ -32,17 +32,22 @@ html, body {
 	height: min(80vw - 4px, 80vh - 4px);
 }
 
-#select-entity, #select-layer, #select-tool {
+#select-entity, #select-layer, #select-tool, #map-name {
 	height: 1.2rem;
 	position: relative;
 	left: 0.5rem;
 	width: min(20vw - 1rem - 8px, 20vh - 1rem - 8px);
 }
 
+#map-name {
+	position: relative;
+	top: 1rem;
+}
+
 #button-import {
 	position: relative;
 	left: 0.5rem;
-	top: min(80vw - 7rem - 8px, 80vh - 7rem - 8px);
+	top: min(80vw - 8.5rem - 8px, 80vh - 8.5rem - 8px);
 	
 	cursor: pointer;
 	
@@ -59,7 +64,7 @@ html, body {
 #button-export {
 	position: relative;
 	left: 0.5rem;
-	top: min(80vw - 6.5rem - 8px, 80vh - 6.5rem - 8px);
+	top: min(80vw - 8rem - 8px, 80vh - 8rem - 8px);
 	
 	cursor: pointer;
 	
